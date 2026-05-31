@@ -1,51 +1,39 @@
-// app/(dashboard)/school-admin/page.tsx
-
 "use client";
 
 import { useEffect, useState } from "react";
 import axios from "axios";
 import toast from "react-hot-toast";
 import Navbar from "@/components/Navbar";
-import {
-  CheckCircle,
-  XCircle,
-  UserPlus,
-  Users,
-  Clock,
-} from "lucide-react";
+import { CheckCircle, XCircle, UserPlus, Users, Clock, Loader2, Eye, EyeOff } from "lucide-react";
 
-interface User {
+interface IUser {
   _id: string;
   name: string;
   email: string;
-  isApproved: boolean;
   createdAt: string;
 }
 
 export default function SchoolAdminDashboard() {
-  const [teachers, setTeachers] = useState<User[]>([]);
-  const [pendingStudents, setPendingStudents] = useState<User[]>([]);
-  const [approvedStudents, setApprovedStudents] = useState<User[]>([]);
-  const [tab, setTab] = useState<"teachers" | "pending" | "students">("pending");
+  const [teachers, setTeachers] = useState<IUser[]>([]);
+  const [pendingStudents, setPendingStudents] = useState<IUser[]>([]);
+  const [approvedStudents, setApprovedStudents] = useState<IUser[]>([]);
+  const [tab, setTab] = useState<"pending" | "students" | "teachers">("pending");
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [showAddTeacher, setShowAddTeacher] = useState(false);
-  const [teacherForm, setTeacherForm] = useState({
-    name: "",
-    email: "",
-    password: "",
-  });
+  const [showModal, setShowModal] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [teacherForm, setTeacherForm] = useState({ name: "", email: "", password: "" });
 
   const fetchData = async () => {
     try {
-      const [teacherRes, pendingRes, approvedRes] = await Promise.all([
+      const [t, p, a] = await Promise.all([
         axios.get("/api/school/teachers"),
         axios.get("/api/school/students?status=pending"),
         axios.get("/api/school/students?status=approved"),
       ]);
-      setTeachers(teacherRes.data.teachers);
-      setPendingStudents(pendingRes.data.students);
-      setApprovedStudents(approvedRes.data.students);
+      setTeachers(t.data.teachers);
+      setPendingStudents(p.data.students);
+      setApprovedStudents(a.data.students);
     } catch {
       toast.error("Failed to fetch data");
     } finally {
@@ -53,14 +41,9 @@ export default function SchoolAdminDashboard() {
     }
   };
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  useEffect(() => { fetchData(); }, []);
 
-  const handleStudentAction = async (
-    id: string,
-    action: "approve" | "reject"
-  ) => {
+  const handleStudentAction = async (id: string, action: "approve" | "reject") => {
     setActionLoading(id);
     try {
       const res = await axios.put(`/api/school/students/${id}`, { action });
@@ -77,245 +60,149 @@ export default function SchoolAdminDashboard() {
     e.preventDefault();
     try {
       await axios.post("/api/school/teachers", teacherForm);
-      toast.success("Teacher added successfully!");
-      setShowAddTeacher(false);
+      toast.success("Teacher added!");
+      setShowModal(false);
       setTeacherForm({ name: "", email: "", password: "" });
       fetchData();
     } catch (err: any) {
-      toast.error(err.response?.data?.error || "Failed to add teacher");
+      toast.error(err.response?.data?.error || "Failed");
     }
   };
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
+  const tabs = [
+    { key: "pending" as const, label: `Pending (${pendingStudents.length})` },
+    { key: "students" as const, label: `Students (${approvedStudents.length})` },
+    { key: "teachers" as const, label: `Teachers (${teachers.length})` },
+  ];
 
+  const renderList = () => {
+    if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin text-blue-400" size={32} /></div>;
+
+    if (tab === "pending")
+      return pendingStudents.length === 0 ? (
+        <p className="text-center text-slate-500 py-16">No pending students.</p>
+      ) : pendingStudents.map((s) => (
+        <div key={s._id} className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-5 flex items-center justify-between">
+          <div>
+            <p className="font-semibold text-white">{s.name}</p>
+            <p className="text-sm text-slate-400">{s.email}</p>
+            <p className="text-xs text-slate-600">{new Date(s.createdAt).toLocaleDateString("en-IN")}</p>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={() => handleStudentAction(s._id, "approve")} disabled={actionLoading === s._id}
+              className="flex items-center gap-1.5 bg-green-600 hover:bg-green-500 text-white px-3 py-2 rounded-xl text-sm transition disabled:opacity-50">
+              {actionLoading === s._id ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle size={14} />} Approve
+            </button>
+            <button onClick={() => handleStudentAction(s._id, "reject")} disabled={actionLoading === s._id}
+              className="flex items-center gap-1.5 bg-red-600 hover:bg-red-500 text-white px-3 py-2 rounded-xl text-sm transition disabled:opacity-50">
+              <XCircle size={14} /> Reject
+            </button>
+          </div>
+        </div>
+      ));
+
+    const list = tab === "students" ? approvedStudents : teachers;
+    return list.length === 0 ? (
+      <p className="text-center text-slate-500 py-16">No {tab} yet.</p>
+    ) : list.map((u) => (
+      <div key={u._id} className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-5 flex items-center justify-between">
+        <div>
+          <p className="font-semibold text-white">{u.name}</p>
+          <p className="text-sm text-slate-400">{u.email}</p>
+        </div>
+        <span className={`text-xs px-3 py-1 rounded-full font-medium ${tab === "teachers" ? "bg-blue-500/20 text-blue-300 border border-blue-500/30" : "bg-green-500/20 text-green-300 border border-green-500/30"}`}>
+          {tab === "teachers" ? "Teacher" : "Student"}
+        </span>
+      </div>
+    ));
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-900 text-white">
+      <Navbar />
       <div className="max-w-6xl mx-auto px-6 py-8">
+        <h1 className="text-2xl font-bold mb-8">School Admin Dashboard</h1>
+
         {/* Stats */}
         <div className="grid grid-cols-3 gap-4 mb-8">
           {[
-            {
-              label: "Teachers",
-              count: teachers.length,
-              icon: <Users className="text-blue-600" size={24} />,
-              bg: "bg-blue-100",
-            },
-            {
-              label: "Pending Students",
-              count: pendingStudents.length,
-              icon: <Clock className="text-yellow-600" size={24} />,
-              bg: "bg-yellow-100",
-            },
-            {
-              label: "Approved Students",
-              count: approvedStudents.length,
-              icon: <CheckCircle className="text-green-600" size={24} />,
-              bg: "bg-green-100",
-            },
-          ].map((stat) => (
-            <div
-              key={stat.label}
-              className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex items-center gap-4"
-            >
-              <div className={`${stat.bg} p-3 rounded-xl`}>{stat.icon}</div>
-              <div>
-                <p className="text-sm text-gray-500">{stat.label}</p>
-                <p className="text-3xl font-bold text-gray-800">{stat.count}</p>
-              </div>
+            { label: "Teachers", count: teachers.length, color: "text-blue-400", bg: "bg-blue-500/10 border-blue-500/20" },
+            { label: "Pending Students", count: pendingStudents.length, color: "text-yellow-400", bg: "bg-yellow-500/10 border-yellow-500/20" },
+            { label: "Students", count: approvedStudents.length, color: "text-green-400", bg: "bg-green-500/10 border-green-500/20" },
+          ].map((s) => (
+            <div key={s.label} className={`border rounded-2xl p-5 ${s.bg}`}>
+              <p className="text-sm text-slate-400">{s.label}</p>
+              <p className={`text-3xl font-bold mt-1 ${s.color}`}>{s.count}</p>
             </div>
           ))}
         </div>
 
-        {/* Tabs */}
-        <div className="flex gap-2 mb-6">
-          {(
-            [
-              { key: "pending", label: `Pending (${pendingStudents.length})` },
-              { key: "students", label: `Students (${approvedStudents.length})` },
-              { key: "teachers", label: `Teachers (${teachers.length})` },
-            ] as const
-          ).map((t) => (
-            <button
-              key={t.key}
-              onClick={() => setTab(t.key)}
-              className={`px-5 py-2 rounded-lg font-medium text-sm transition ${
-                tab === t.key
-                  ? "bg-blue-600 text-white"
-                  : "bg-white text-gray-600 border border-gray-200 hover:bg-gray-50"
-              }`}
-            >
-              {t.label}
+        {/* Tabs + Add Teacher */}
+        <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+          <div className="flex gap-2">
+            {tabs.map((t) => (
+              <button key={t.key} onClick={() => setTab(t.key)}
+                className={`px-4 py-2 rounded-xl font-medium text-sm transition ${tab === t.key ? "bg-blue-600 text-white" : "bg-slate-800 text-slate-400 border border-slate-700 hover:border-slate-500"}`}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+          {tab === "teachers" && (
+            <button onClick={() => setShowModal(true)}
+              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl text-sm font-medium transition">
+              <UserPlus size={16} /> Add Teacher
             </button>
-          ))}
+          )}
         </div>
 
-        {/* Add Teacher Button */}
-        {tab === "teachers" && (
-          <button
-            onClick={() => setShowAddTeacher(true)}
-            className="flex items-center gap-2 mb-4 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition"
-          >
-            <UserPlus size={16} />
-            Add Teacher
-          </button>
-        )}
+        <div className="grid gap-4">{renderList()}</div>
+      </div>
 
-        {/* Add Teacher Modal */}
-        {showAddTeacher && (
-          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-            <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
-              <h2 className="text-lg font-semibold text-gray-800 mb-4">
-                Add New Teacher
-              </h2>
-              <form onSubmit={handleAddTeacher} className="space-y-4">
-                {[
-                  { key: "name", label: "Name", type: "text" },
-                  { key: "email", label: "Email", type: "email" },
-                  { key: "password", label: "Password", type: "password" },
-                ].map((field) => (
-                  <div key={field.key}>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {field.label}
-                    </label>
-                    <input
-                      type={field.type}
-                      required
-                      value={(teacherForm as any)[field.key]}
-                      onChange={(e) =>
-                        setTeacherForm({
-                          ...teacherForm,
-                          [field.key]: e.target.value,
-                        })
-                      }
-                      className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                ))}
-                <div className="flex gap-3 pt-2">
-                  <button
-                    type="submit"
-                    className="flex-1 bg-blue-600 text-white py-2.5 rounded-lg font-medium hover:bg-blue-700 transition"
-                  >
-                    Add Teacher
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowAddTeacher(false)}
-                    className="flex-1 bg-gray-100 text-gray-700 py-2.5 rounded-lg font-medium hover:bg-gray-200 transition"
-                  >
-                    Cancel
+      {/* Modal */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-800 border border-slate-700 rounded-3xl p-8 w-full max-w-md shadow-2xl">
+            <h2 className="text-lg font-semibold text-white mb-6">Add New Teacher</h2>
+            <form onSubmit={handleAddTeacher} className="space-y-4">
+              {[
+                { key: "name", label: "Name", type: "text", placeholder: "Teacher name" },
+                { key: "email", label: "Email", type: "email", placeholder: "teacher@school.com" },
+              ].map((f) => (
+                <div key={f.key} className="space-y-1.5">
+                  <label className="text-sm font-medium text-slate-300">{f.label}</label>
+                  <input type={f.type} required value={(teacherForm as any)[f.key]}
+                    onChange={(e) => setTeacherForm({ ...teacherForm, [f.key]: e.target.value })}
+                    placeholder={f.placeholder}
+                    className="w-full bg-slate-900/50 border border-slate-600 text-white placeholder-slate-500 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 transition" />
+                </div>
+              ))}
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-slate-300">Password</label>
+                <div className="relative">
+                  <input type={showPassword ? "text" : "password"} required value={teacherForm.password}
+                    onChange={(e) => setTeacherForm({ ...teacherForm, password: e.target.value })}
+                    placeholder="Min. 6 characters"
+                    className="w-full bg-slate-900/50 border border-slate-600 text-white placeholder-slate-500 rounded-xl px-4 py-3 pr-12 focus:outline-none focus:ring-2 focus:ring-blue-500 transition" />
+                  <button type="button" onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 transition">
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
                 </div>
-              </form>
-            </div>
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button type="submit"
+                  className="flex-1 bg-blue-600 hover:bg-blue-500 text-white py-3 rounded-xl font-medium transition">
+                  Add Teacher
+                </button>
+                <button type="button" onClick={() => setShowModal(false)}
+                  className="flex-1 bg-slate-700 hover:bg-slate-600 text-slate-300 py-3 rounded-xl font-medium transition">
+                  Cancel
+                </button>
+              </div>
+            </form>
           </div>
-        )}
-
-        {/* Content */}
-        {loading ? (
-          <p className="text-center text-gray-500 py-12">Loading...</p>
-        ) : (
-          <div className="grid gap-4">
-            {/* Pending Students */}
-            {tab === "pending" &&
-              (pendingStudents.length === 0 ? (
-                <p className="text-center text-gray-500 py-12">
-                  No pending students.
-                </p>
-              ) : (
-                pendingStudents.map((student) => (
-                  <div
-                    key={student._id}
-                    className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex items-center justify-between"
-                  >
-                    <div>
-                      <p className="font-semibold text-gray-800">
-                        {student.name}
-                      </p>
-                      <p className="text-sm text-gray-500">{student.email}</p>
-                      <p className="text-xs text-gray-400">
-                        {new Date(student.createdAt).toLocaleDateString("en-IN")}
-                      </p>
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() =>
-                          handleStudentAction(student._id, "approve")
-                        }
-                        disabled={actionLoading === student._id}
-                        className="flex items-center gap-1 bg-green-500 text-white px-3 py-2 rounded-lg text-sm hover:bg-green-600 transition disabled:opacity-50"
-                      >
-                        <CheckCircle size={15} />
-                        Approve
-                      </button>
-                      <button
-                        onClick={() =>
-                          handleStudentAction(student._id, "reject")
-                        }
-                        disabled={actionLoading === student._id}
-                        className="flex items-center gap-1 bg-red-500 text-white px-3 py-2 rounded-lg text-sm hover:bg-red-600 transition disabled:opacity-50"
-                      >
-                        <XCircle size={15} />
-                        Reject
-                      </button>
-                    </div>
-                  </div>
-                ))
-              ))}
-
-            {/* Approved Students */}
-            {tab === "students" &&
-              (approvedStudents.length === 0 ? (
-                <p className="text-center text-gray-500 py-12">
-                  No approved students yet.
-                </p>
-              ) : (
-                approvedStudents.map((student) => (
-                  <div
-                    key={student._id}
-                    className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex items-center justify-between"
-                  >
-                    <div>
-                      <p className="font-semibold text-gray-800">
-                        {student.name}
-                      </p>
-                      <p className="text-sm text-gray-500">{student.email}</p>
-                    </div>
-                    <span className="flex items-center gap-1 text-green-600 text-sm font-medium">
-                      <CheckCircle size={15} />
-                      Approved
-                    </span>
-                  </div>
-                ))
-              ))}
-
-            {/* Teachers */}
-            {tab === "teachers" &&
-              (teachers.length === 0 ? (
-                <p className="text-center text-gray-500 py-12">
-                  No teachers added yet.
-                </p>
-              ) : (
-                teachers.map((teacher) => (
-                  <div
-                    key={teacher._id}
-                    className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex items-center justify-between"
-                  >
-                    <div>
-                      <p className="font-semibold text-gray-800">
-                        {teacher.name}
-                      </p>
-                      <p className="text-sm text-gray-500">{teacher.email}</p>
-                    </div>
-                    <span className="text-xs bg-blue-100 text-blue-700 px-3 py-1 rounded-full font-medium">
-                      Teacher
-                    </span>
-                  </div>
-                ))
-              ))}
-          </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
