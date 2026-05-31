@@ -96,10 +96,11 @@ ${contentContext}`,
       content: m.content,
     }));
 
-    const model = genAI.getGenerativeModel({
-      model: "gemini-1.5-flash",
-      systemInstruction: systemPrompt,
-    });
+    // Naya
+const model = genAI.getGenerativeModel({
+  model: "gemini-2.0-flash",
+  systemInstruction: systemPrompt,
+});
 
     const chat = model.startChat({
       history: previousMessages.map((m: any) => ({
