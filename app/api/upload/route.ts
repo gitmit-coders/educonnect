@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 });
     }
 
-    const MAX_SIZE = 10 * 1024 * 1024; // 10MB
+    const MAX_SIZE = 10 * 1024 * 1024;
     if (file.size > MAX_SIZE) {
       return NextResponse.json(
         { error: "File size cannot exceed 10MB" },
@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
-    const fileUrl = await uploadToCloudinary(buffer, file.name);
+    const fileUrl = await uploadToCloudinary(buffer, file.name, file.type);
 
     return NextResponse.json({ fileUrl }, { status: 200 });
   } catch (err: any) {
