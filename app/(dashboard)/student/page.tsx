@@ -59,7 +59,7 @@ export default function StudentDashboard() {
       .finally(() => setLoading(false));
   }, []);
 
-  // Available classes dynamically fetch karo content se
+  // Available classes dynamically content se lo
   const availableClasses = [
     "all",
     ...Array.from(
@@ -71,7 +71,7 @@ export default function StudentDashboard() {
     ).sort(),
   ];
 
-  // Tab + class dono se filter karo
+  // Tab + class dono se filter
   const filtered = contents.filter((c) => {
     const tabMatch = tab === "all" || c.contentType === tab;
     const classMatch = selectedClass === "all" || c.classGrade === selectedClass;
@@ -89,7 +89,7 @@ export default function StudentDashboard() {
         <div className="max-w-6xl mx-auto px-6 py-8">
           <h1 className="text-2xl font-bold mb-6">Study Material</h1>
 
-          {/* Filters row */}
+          {/* Filters */}
           <div className="flex flex-wrap items-center gap-3 mb-6">
 
             {/* Class dropdown */}
