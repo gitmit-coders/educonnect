@@ -15,26 +15,27 @@ export async function uploadToCloudinary(
   folder: string = "educonnect"
 ): Promise<string> {
   return new Promise((resolve, reject) => {
-    const isPDF = mimeType === "application/pdf";
-
     const uploadStream = cloudinary.uploader.upload_stream(
       {
         folder,
-        resource_type: isPDF ? "raw" : "image", // PDF = raw, image = image
-        public_id: `${Date.now()}-${filename}`,
-        // PDF ke liye inline flag — browser mein open hoga
-        ...(isPDF && {
-          flags: "attachment:false",
-        }),
+        resource_type: "auto",
+        public_id: `${Date.now()}-${filename.replace(/\.[^/.]+$/, "")}`,
+        format: mimeType === "application/pdf" ? "pdf" : undefined,
+        // PDF inline open hoga
+        type: "upload",
+        access_mode: "public",
       },
       (error, result) => {
-        if (error) reject(error);
-        else {
-          // PDF URL mein fl_attachment:false add karo
+        if (error) {
+          reject(error);
+        } else {
           let url = result!.secure_url;
-          if (isPDF) {
-            // Cloudinary raw URL ko inline open karne ke liye
-            url = url.replace("/raw/upload/", "/raw/upload/fl_attachment:false/");
+          // PDF ke liye fl_attachment:false — browser mein open ho
+          if (mimeType === "application/pdf") {
+            url = url.replace(
+              "/upload/",
+              "/upload/fl_attachment:false/"
+            );
           }
           resolve(url);
         }

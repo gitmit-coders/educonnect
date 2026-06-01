@@ -120,14 +120,7 @@ export default function TeacherDashboard() {
   };
 
   const openFile = (url: string) => {
-  // PDF ko Google Docs viewer se open karo
-  const isPDF = url.includes(".pdf") || url.includes("/raw/");
-  if (isPDF) {
-    const viewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(url)}&embedded=false`;
-    window.open(viewerUrl, "_blank", "noopener,noreferrer");
-  } else {
-    window.open(url, "_blank", "noopener,noreferrer");
-  }
+  window.open(url, "_blank", "noopener,noreferrer");
 };
 
   return (
