@@ -1,8 +1,13 @@
 // app/api/upload/route.ts
 
 import { NextRequest, NextResponse } from "next/server";
-import { uploadToCloudinary } from "@/lib/cloudinary";
+import { createClient } from "@supabase/supabase-js";
 import { requireRole } from "@/lib/routeHelper";
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
 export async function POST(req: NextRequest) {
   const { session, error } = await requireRole(["teacher"]);
@@ -13,10 +18,13 @@ export async function POST(req: NextRequest) {
     const file = formData.get("file") as File;
 
     if (!file) {
-      return NextResponse.json({ error: "No file provided" }, { status: 400 });
+      return NextResponse.json(
+        { error: "No file provided" },
+        { status: 400 }
+      );
     }
 
-    const MAX_SIZE = 10 * 1024 * 1024;
+    const MAX_SIZE = 10 * 1024 * 1024; // 10MB
     if (file.size > MAX_SIZE) {
       return NextResponse.json(
         { error: "File size cannot exceed 10MB" },
@@ -38,10 +46,38 @@ export async function POST(req: NextRequest) {
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
-    const fileUrl = await uploadToCloudinary(buffer, file.name, file.type);
+    const fileName = `${Date.now()}-${file.name.replace(/\s+/g, "-")}`;
 
-    return NextResponse.json({ fileUrl }, { status: 200 });
+    // Supabase Storage mein upload karo
+    const { data, error: uploadError } = await supabase.storage
+      .from("educonnect-files")
+      .upload(fileName, buffer, {
+        contentType: file.type,
+        upsert: false,
+      });
+
+    if (uploadError) {
+      console.error("Supabase upload error:", uploadError);
+      return NextResponse.json(
+        { error: uploadError.message },
+        { status: 500 }
+      );
+    }
+
+    // Public URL lo
+    const { data: publicData } = supabase.storage
+      .from("educonnect-files")
+      .getPublicUrl(fileName);
+
+    return NextResponse.json(
+      { fileUrl: publicData.publicUrl },
+      { status: 200 }
+    );
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    console.error("Upload error:", err);
+    return NextResponse.json(
+      { error: err.message },
+      { status: 500 }
+    );
   }
 }
