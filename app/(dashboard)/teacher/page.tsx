@@ -4,8 +4,10 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import toast from "react-hot-toast";
 import Navbar from "@/components/Navbar";
-import { Plus, Trash2, Eye, EyeOff, Upload, Loader2, FileText } from "lucide-react";
 import ChatBot from "@/components/ChatBot";
+import {
+  FileText, Megaphone, ClipboardList, BookOpen, Loader2, Filter,
+} from "lucide-react";
 
 interface IContent {
   _id: string;
@@ -14,10 +16,20 @@ interface IContent {
   contentType: string;
   subject: string;
   classGrade: string;
-  isVisible: boolean;
   fileUrl: string | null;
+  uploadedBy: { name: string };
   createdAt: string;
 }
+
+const tabs = [
+  { key: "all", label: "All" },
+  { key: "note", label: "Notes" },
+  { key: "assignment", label: "Assignments" },
+  { key: "announcement", label: "Announcements" },
+  { key: "pyq", label: "PYQ" },
+] as const;
+
+type TabKey = (typeof tabs)[number]["key"];
 
 const typeColors: Record<string, string> = {
   note: "bg-blue-500/20 text-blue-300 border border-blue-500/30",
@@ -26,340 +38,177 @@ const typeColors: Record<string, string> = {
   pyq: "bg-green-500/20 text-green-300 border border-green-500/30",
 };
 
-export default function TeacherDashboard() {
+const typeIcons: Record<string, React.ReactNode> = {
+  note: <BookOpen size={16} className="text-blue-400" />,
+  assignment: <ClipboardList size={16} className="text-orange-400" />,
+  announcement: <Megaphone size={16} className="text-purple-400" />,
+  pyq: <FileText size={16} className="text-green-400" />,
+};
+
+export default function StudentDashboard() {
   const [contents, setContents] = useState<IContent[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [form, setForm] = useState({
-    title: "",
-    description: "",
-    contentType: "note",
-    subject: "",
-    classGrade: "",
-    isVisible: true,
-    fileUrl: "",
-  });
-
-  const fetchContents = async () => {
-    try {
-      const res = await axios.get("/api/content");
-      setContents(res.data.contents);
-    } catch {
-      toast.error("Failed to fetch content");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [tab, setTab] = useState<TabKey>("all");
+  const [selectedClass, setSelectedClass] = useState<string>("all");
 
   useEffect(() => {
-    fetchContents();
+    axios
+      .get("/api/content")
+      .then((res) => setContents(res.data.contents))
+      .catch(() => toast.error("Failed to load content"))
+      .finally(() => setLoading(false));
   }, []);
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const data = new FormData();
-    data.append("file", file);
-    setUploading(true);
-    try {
-      const res = await axios.post("/api/upload", data);
-      setForm((prev) => ({ ...prev, fileUrl: res.data.fileUrl }));
-      toast.success("File uploaded!");
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || "Upload failed");
-    } finally {
-      setUploading(false);
-    }
-  };
+  // Available classes dynamically content se lo
+  const availableClasses = [
+    "all",
+    ...Array.from(
+      new Set(
+        contents
+          .map((c) => c.classGrade)
+          .filter((g) => g && g.trim() !== "")
+      )
+    ).sort(),
+  ];
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSubmitting(true);
-    try {
-      await axios.post("/api/content", form);
-      toast.success("Content uploaded!");
-      setShowForm(false);
-      setForm({
-        title: "",
-        description: "",
-        contentType: "note",
-        subject: "",
-        classGrade: "",
-        isVisible: true,
-        fileUrl: "",
-      });
-      fetchContents();
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || "Failed");
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!confirm("Delete this content?")) return;
-    try {
-      await axios.delete(`/api/content/${id}`);
-      toast.success("Deleted!");
-      fetchContents();
-    } catch {
-      toast.error("Delete failed");
-    }
-  };
-
-  const handleToggle = async (id: string, current: boolean) => {
-    try {
-      await axios.put(`/api/content/${id}`, { isVisible: !current });
-      toast.success(current ? "Hidden from students" : "Visible to students");
-      fetchContents();
-    } catch {
-      toast.error("Failed");
-    }
-  };
+  // Tab + class dono se filter
+  const filtered = contents.filter((c) => {
+    const tabMatch = tab === "all" || c.contentType === tab;
+    const classMatch = selectedClass === "all" || c.classGrade === selectedClass;
+    return tabMatch && classMatch;
+  });
 
   const openFile = (url: string) => {
-  window.open(url, "_blank", "noopener,noreferrer");
-};
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
 
   return (
     <>
       <div className="min-h-screen bg-slate-900 text-white">
         <Navbar />
         <div className="max-w-6xl mx-auto px-6 py-8">
-          <div className="flex items-center justify-between mb-8">
-            <h1 className="text-2xl font-bold">My Content</h1>
-            <button
-              onClick={() => setShowForm(true)}
-              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl text-sm font-medium transition"
-            >
-              <Plus size={16} /> Add Content
-            </button>
+          <h1 className="text-2xl font-bold mb-6">Study Material</h1>
+
+          {/* Filters */}
+          <div className="flex flex-wrap items-center gap-3 mb-6">
+
+            {/* Class dropdown */}
+            <div className="flex items-center gap-2 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2">
+              <Filter size={14} className="text-slate-400" />
+              <select
+                value={selectedClass}
+                onChange={(e) => setSelectedClass(e.target.value)}
+                className="bg-transparent text-sm text-white focus:outline-none cursor-pointer"
+              >
+                {availableClasses.map((cls) => (
+                  <option key={cls} value={cls} className="bg-slate-800">
+                    {cls === "all" ? "All Classes" : `Class ${cls}`}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Type tabs */}
+            {tabs.map((t) => {
+              const count = contents.filter((c) => {
+                const tabMatch = t.key === "all" || c.contentType === t.key;
+                const classMatch = selectedClass === "all" || c.classGrade === selectedClass;
+                return tabMatch && classMatch;
+              }).length;
+
+              return (
+                <button
+                  key={t.key}
+                  onClick={() => setTab(t.key)}
+                  className={`px-4 py-2 rounded-xl font-medium text-sm transition ${
+                    tab === t.key
+                      ? "bg-blue-600 text-white"
+                      : "bg-slate-800 text-slate-400 border border-slate-700 hover:border-slate-500"
+                  }`}
+                >
+                  {t.label}
+                  <span className="ml-1.5 opacity-60">({count})</span>
+                </button>
+              );
+            })}
           </div>
 
           {loading ? (
             <div className="flex justify-center py-20">
               <Loader2 className="animate-spin text-blue-400" size={32} />
             </div>
-          ) : contents.length === 0 ? (
-            <div className="text-center py-20">
-              <FileText size={48} className="text-slate-600 mx-auto mb-4" />
-              <p className="text-slate-400 text-lg">No content uploaded yet</p>
-              <p className="text-slate-600 text-sm mt-1">
-                Click "Add Content" to get started
-              </p>
+          ) : filtered.length === 0 ? (
+            <div className="text-center py-20 text-slate-500">
+              <BookOpen size={48} className="mx-auto mb-4 text-slate-700" />
+              <p>No content available for this selection.</p>
+              {selectedClass !== "all" && (
+                <button
+                  onClick={() => setSelectedClass("all")}
+                  className="mt-3 text-blue-400 text-sm hover:underline"
+                >
+                  Show all classes
+                </button>
+              )}
             </div>
           ) : (
-            <div className="grid gap-4">
-              {contents.map((c) => (
+            <div className="grid gap-4 sm:grid-cols-2">
+              {filtered.map((c) => (
                 <div
                   key={c._id}
-                  className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-5"
+                  className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-5 flex flex-col gap-3 hover:border-slate-600 transition"
                 >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2 flex-wrap">
-                        <span
-                          className={`text-xs px-2.5 py-1 rounded-full font-medium ${typeColors[c.contentType]}`}
-                        >
-                          {c.contentType.toUpperCase()}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      {typeIcons[c.contentType]}
+                      <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${typeColors[c.contentType]}`}>
+                        {c.contentType.toUpperCase()}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {c.classGrade && (
+                        <span className="text-xs bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-1 rounded-full">
+                          Class {c.classGrade}
                         </span>
-                        {c.subject && (
-                          <span className="text-xs bg-slate-700 text-slate-300 px-2.5 py-1 rounded-full">
-                            {c.subject}
-                          </span>
-                        )}
-                        {c.classGrade && (
-                          <span className="text-xs bg-slate-700 text-slate-300 px-2.5 py-1 rounded-full">
-                            Grade {c.classGrade}
-                          </span>
-                        )}
-                        {!c.isVisible && (
-                          <span className="text-xs bg-red-500/20 text-red-400 border border-red-500/30 px-2.5 py-1 rounded-full">
-                            Hidden
-                          </span>
-                        )}
-                      </div>
-                      <h3 className="font-semibold text-white">{c.title}</h3>
-                      <p className="text-sm text-slate-400 mt-1 line-clamp-2">
-                        {c.description}
+                      )}
+                      {c.subject && (
+                        <span className="text-xs bg-slate-700 text-slate-400 px-2 py-1 rounded-full">
+                          {c.subject}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 className="font-semibold text-white">{c.title}</h3>
+                    <p className="text-sm text-slate-400 mt-1 line-clamp-3">
+                      {c.description}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center justify-between mt-auto pt-3 border-t border-slate-700/50">
+                    <div>
+                      <p className="text-xs text-slate-500">
+                        By {c.uploadedBy?.name ?? "Teacher"}
                       </p>
-                      <p className="text-xs text-slate-600 mt-2">
+                      <p className="text-xs text-slate-600">
                         {new Date(c.createdAt).toLocaleDateString("en-IN")}
                       </p>
                     </div>
-                    <div className="flex gap-2 shrink-0">
-                      {c.fileUrl && (
-                        <button
-                          onClick={() => openFile(c.fileUrl!)}
-                          className="text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 px-3 py-2 rounded-xl transition"
-                        >
-                          View
-                        </button>
-                      )}
+                    {c.fileUrl && (
                       <button
-                        onClick={() => handleToggle(c._id, c.isVisible)}
-                        className="p-2 rounded-xl bg-slate-700 hover:bg-slate-600 transition"
-                        title={c.isVisible ? "Hide" : "Show"}
+                        onClick={() => openFile(c.fileUrl!)}
+                        className="text-sm bg-blue-600 hover:bg-blue-500 text-white px-4 py-1.5 rounded-xl transition"
                       >
-                        {c.isVisible ? (
-                          <Eye size={16} className="text-slate-300" />
-                        ) : (
-                          <EyeOff size={16} className="text-slate-500" />
-                        )}
+                        Open File
                       </button>
-                      <button
-                        onClick={() => handleDelete(c._id)}
-                        className="p-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 transition"
-                      >
-                        <Trash2 size={16} className="text-red-400" />
-                      </button>
-                    </div>
+                    )}
                   </div>
                 </div>
               ))}
             </div>
           )}
         </div>
-
-        {/* Modal */}
-        {showForm && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-slate-800 border border-slate-700 rounded-3xl p-8 w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
-              <h2 className="text-lg font-semibold text-white mb-6">
-                Upload New Content
-              </h2>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-slate-300">
-                    Content Type
-                  </label>
-                  <select
-                    value={form.contentType}
-                    onChange={(e) =>
-                      setForm({ ...form, contentType: e.target.value })
-                    }
-                    className="w-full bg-slate-900/50 border border-slate-600 text-white rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
-                  >
-                    {["note", "assignment", "announcement", "pyq"].map((t) => (
-                      <option key={t} value={t}>
-                        {t.charAt(0).toUpperCase() + t.slice(1)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {[
-                  { key: "title", label: "Title", placeholder: "Content title" },
-                  { key: "subject", label: "Subject", placeholder: "e.g. Mathematics" },
-                  { key: "classGrade", label: "Class/Grade", placeholder: "e.g. 10A" },
-                ].map((f) => (
-                  <div key={f.key} className="space-y-1.5">
-                    <label className="text-sm font-medium text-slate-300">
-                      {f.label}
-                    </label>
-                    <input
-                      type="text"
-                      required={f.key === "title"}
-                      value={(form as any)[f.key]}
-                      onChange={(e) =>
-                        setForm({ ...form, [f.key]: e.target.value })
-                      }
-                      placeholder={f.placeholder}
-                      className="w-full bg-slate-900/50 border border-slate-600 text-white placeholder-slate-500 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
-                    />
-                  </div>
-                ))}
-
-                <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-slate-300">
-                    Description
-                  </label>
-                  <textarea
-                    required
-                    rows={3}
-                    value={form.description}
-                    onChange={(e) =>
-                      setForm({ ...form, description: e.target.value })
-                    }
-                    placeholder="Brief description of the content"
-                    className="w-full bg-slate-900/50 border border-slate-600 text-white placeholder-slate-500 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 transition resize-none"
-                  />
-                </div>
-
-                {form.contentType !== "announcement" && (
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-slate-300">
-                      Upload File
-                    </label>
-                    <label
-                      htmlFor="file-upload"
-                      className="flex flex-col items-center justify-center border-2 border-dashed border-slate-600 hover:border-blue-500 rounded-xl p-6 cursor-pointer transition"
-                    >
-                      <Upload size={24} className="text-slate-500 mb-2" />
-                      <span className="text-sm text-slate-400">
-                        {uploading
-                          ? "Uploading..."
-                          : form.fileUrl
-                          ? "✓ File uploaded!"
-                          : "Click to upload PDF or image"}
-                      </span>
-                      <input
-                        id="file-upload"
-                        type="file"
-                        accept=".pdf,image/*"
-                        onChange={handleFileUpload}
-                        className="hidden"
-                      />
-                    </label>
-                  </div>
-                )}
-
-                <div className="flex items-center gap-3">
-                  <input
-                    type="checkbox"
-                    id="visible"
-                    checked={form.isVisible}
-                    onChange={(e) =>
-                      setForm({ ...form, isVisible: e.target.checked })
-                    }
-                    className="w-4 h-4 accent-blue-500"
-                  />
-                  <label htmlFor="visible" className="text-sm text-slate-300">
-                    Visible to students immediately
-                  </label>
-                </div>
-
-                <div className="flex gap-3 pt-2">
-                  <button
-                    type="submit"
-                    disabled={submitting || uploading}
-                    className="flex-1 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white py-3 rounded-xl font-medium transition flex items-center justify-center gap-2"
-                  >
-                    {submitting ? (
-                      <>
-                        <Loader2 size={16} className="animate-spin" />
-                        Uploading...
-                      </>
-                    ) : (
-                      "Upload Content"
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowForm(false)}
-                    className="flex-1 bg-slate-700 hover:bg-slate-600 text-slate-300 py-3 rounded-xl font-medium transition"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
       </div>
-
       <ChatBot />
     </>
   );
