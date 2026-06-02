@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import { useSession } from "next-auth/react";
 import axios from "axios";
 import toast from "react-hot-toast";
 import {
@@ -22,6 +23,7 @@ const SIZES = {
 };
 
 export default function ChatBot() {
+  const { data: session } = useSession();
   const [open, setOpen] = useState(false);
   const [minimized, setMinimized] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -35,6 +37,13 @@ export default function ChatBot() {
   const dragOffset = useRef({ x: 0, y: 0 });
   const bottomRef = useRef<HTMLDivElement>(null);
 
+  // User change hone pe — chat clear karo
+  useEffect(() => {
+    setMessages([]);
+    setOpen(false);
+    setInitialized(false);
+  }, [session?.user?.id]);
+
   useEffect(() => {
     if (open && !initialized) {
       setPos({
@@ -45,6 +54,7 @@ export default function ChatBot() {
     }
   }, [open, initialized]);
 
+  // Chat history fetch — sirf us user ki
   useEffect(() => {
     if (open && messages.length === 0) {
       axios.get("/api/chatbot").then((res) => {
@@ -53,6 +63,8 @@ export default function ChatBot() {
             ? res.data.messages
             : [{ role: "assistant", content: "Hi! I'm EduBot 👋 Ask me anything — doubts, notes, or summaries!" }]
         );
+      }).catch(() => {
+        setMessages([{ role: "assistant", content: "Hi! I'm EduBot 👋 Ask me anything — doubts, notes, or summaries!" }]);
       });
     }
   }, [open]);
@@ -126,7 +138,6 @@ export default function ChatBot() {
     }
   };
 
-  // PDF download function
   const downloadAsPDF = (content: string) => {
     const printWindow = window.open("", "_blank");
     if (!printWindow) {
@@ -134,7 +145,6 @@ export default function ChatBot() {
       return;
     }
 
-    // Format content — newlines to <br>, **bold** to <strong>
     const formatted = content
       .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
       .replace(/\*(.*?)\*/g, "<em>$1</em>")
@@ -163,19 +173,9 @@ export default function ChatBot() {
               border-radius: 12px;
               margin-bottom: 32px;
             }
-            .header h1 {
-              margin: 0;
-              font-size: 22px;
-              font-weight: 700;
-            }
-            .header p {
-              margin: 6px 0 0;
-              font-size: 13px;
-              opacity: 0.85;
-            }
-            .content {
-              font-size: 15px;
-            }
+            .header h1 { margin: 0; font-size: 22px; font-weight: 700; }
+            .header p { margin: 6px 0 0; font-size: 13px; opacity: 0.85; }
+            .content { font-size: 15px; }
             h3 {
               color: #1e3a8a;
               font-size: 17px;
@@ -193,9 +193,7 @@ export default function ChatBot() {
               color: #94a3b8;
               text-align: center;
             }
-            @media print {
-              body { margin: 20px; }
-            }
+            @media print { body { margin: 20px; } }
           </style>
         </head>
         <body>
@@ -233,9 +231,6 @@ export default function ChatBot() {
     "generate-notes": "📝 Notes",
     summarize: "📋 Summarize",
   };
-
-  // last assistant message jo download hogi
-  const lastAssistantMsg = [...messages].reverse().find((m) => m.role === "assistant");
 
   return (
     <>
@@ -315,7 +310,6 @@ export default function ChatBot() {
                       {msg.content}
                     </div>
 
-                    {/* Download button — sirf assistant messages pe */}
                     {msg.role === "assistant" && msg.content.length > 100 && (
                       <button
                         onClick={() => downloadAsPDF(msg.content)}
